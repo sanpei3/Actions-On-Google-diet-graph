@@ -83,11 +83,25 @@ function updateDiet(weight, accessToken, callback) {
     
     rp(options).then((response) => {
 	//self.attributes['serverError'] = 0;
-	message = weight + 'kg で記録しました。';
-	callback(null, {
-            "statusCode": 200, 
-            "body": build_callback_data_for_success(message)
-        });
+	if (response.match(/<p>ログアウトまたはタイムアウトしました。<\/p>/)) {
+            const message = "アカウントリンクの有効期限が切れているようです。アカウントリンクを再設定してください";
+            callback(null, {
+		"statusCode": 200,
+		"body": build_callback_data(message)
+            });
+	} else if (response.match(/登録しました。<br>/)) {
+	    message = weight + 'kg で記録しました。';
+	    callback(null, {
+		"statusCode": 200,
+		"body": build_callback_data_for_success(message)
+            });
+	} else {
+            message = '記録に失敗しました。体重グラフのサーバが不調な可能性があります時間を置いてから試みてください';
+            callback(null, {
+		"statusCode": 200,
+		"body": build_callback_data(message)
+            });
+	}
     }, (error) => {
 	//var serverError = Number(t.attributes['serverError']);
 	//var serverError = 0;
@@ -143,7 +157,30 @@ exports.handler = (event, context, callback) => {
             "body": build_callback_data(message)
         });
     }
-    
+
+    var options = {
+	method: 'GET',
+	uri: "https://diet.dyndns.org/?cmd=oa2_isvalid",
+	headers: {
+	    'Authorization': "Bearer " + accessToken,
+	},
+    };
+    rp(options).then((response) => {
+	if (response == '{"isValid":false}') {
+            const message = "利用するために体重グラフでのアカウントのリンク設定をしてください。";
+            callback(null, {
+		"statusCode": 200,
+		"body": build_callback_data(message)
+            });
+	}
+    }, (error) => {
+        message = '記録に失敗しました。体重グラフのサーバが不調な可能性があります時間を置いてから試みてください';
+        callback(null, {
+            "statusCode": 200,
+            "body": build_callback_data(message)
+        });
+    });
+
     var resolvedQuery = body.result.resolvedQuery;
 
     var v1, v2, v3;
@@ -152,7 +189,6 @@ exports.handler = (event, context, callback) => {
     v3 = resolvedQuery.match(/(\d+)\s*と\s*(\d+)\s*/);
 
     if (v1 != undefined) {
-        console.error(v1[2], weight);
         var dotnumber = convertDotNumberStringToDotNumber(v1[2], 5);
         if (dotnumber == -1) {
             weight = undefined;
@@ -160,7 +196,6 @@ exports.handler = (event, context, callback) => {
             weight = Number(v1[1]) + dotnumber;
         }
     } else if (v2 != undefined) {
-        console.error(v2[2], weight);
         var dotnumber = convertDotNumberStringToDotNumber(v2[2], 5);
         if (dotnumber == -1) {
             weight = undefined;
@@ -168,7 +203,6 @@ exports.handler = (event, context, callback) => {
             weight = Number(v2[1]) + dotnumber;
         }
     } else if (v3 != undefined) {
-        console.error(v3[2], weight);
         var dotnumber = convertDotNumberStringToDotNumber(v3[2], 5);
         if (dotnumber == -1) {
             weight = undefined;
