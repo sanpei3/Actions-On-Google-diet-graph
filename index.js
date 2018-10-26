@@ -174,7 +174,7 @@ exports.handler = (event, context, callback) => {
             });
 	}
     }, (error) => {
-        message = '記録に失敗しました。体重グラフのサーバが不調な可能性があります時間を置いてから試みてください';
+        const message = '記録に失敗しました。体重グラフのサーバが不調な可能性があります時間を置いてから試みてください';
         callback(null, {
             "statusCode": 200,
             "body": build_callback_data(message)
