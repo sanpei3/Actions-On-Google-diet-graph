@@ -13,8 +13,25 @@ const build_callback_data = (message) => {
     const json = {
         speech: message,
         displayText: message,
+        data: {
+            google: {
+                expectUserResponse: false,
+            }
+        }
     };
+    return JSON.stringify(json);
+};
 
+const build_callback_data_continue = (message) => {
+    const json = {
+        speech: message,
+        displayText: message,
+        data: {
+            google: {
+                expectUserResponse: true,
+            }
+        }
+    };
     return JSON.stringify(json);
 };
 
@@ -24,6 +41,7 @@ const build_callback_data_for_success = (message) => {
         displayText: message,
         data: {
             google: {
+                expectUserResponse: false,
                 richResponse: {
                     items: [
                         {
@@ -50,7 +68,6 @@ const build_callback_data_for_success = (message) => {
             }
         }
     };
-
     return JSON.stringify(json);
 };
 
@@ -214,7 +231,7 @@ exports.handler = (event, context, callback) => {
         const message = 'すみません、聞き取れませんでした。もう一度、体重を教えてください。';
         callback(null, {
             "statusCode": 200, 
-            "body": build_callback_data(message)
+            "body": build_callback_data_continue(message)
         });
     } else {
         if ( 1 <= weight && weight <= 600 ) {
@@ -224,7 +241,7 @@ exports.handler = (event, context, callback) => {
             const message = '600キログラム以下に対応しています。もう一度、体重を教えてください。';
             callback(null, {
 		    "statusCode": 200,
-		    "body": build_callback_data(message)
+		    "body": build_callback_data_continue(message)
             });
 	    }
     }
