@@ -122,8 +122,6 @@ app.intent('weight', (conv, { weight, dot_number }) => {
     }
 
     weight = Number(weight);
-    console.error(weight);
-    console.error(dot_number);
     if (conv.user.access.token == null) {
         const message = "利用するために体重グラフでのアカウントのリンク設定をしてください。";
 	conv.close(message);
