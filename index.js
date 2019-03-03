@@ -5,72 +5,24 @@
 
 'use strict';
 
-const rp = require("request-promise");
+const rp = require("request-promise-native");
 
+// If you use node.js 8.10 and later, you must to set enviroment variable on lambda console
 process.env.TZ = "Asia/Tokyo";
 
-const build_callback_data = (message) => {
-    const json = {
-        speech: message,
-        displayText: message,
-        data: {
-            google: {
-                expectUserResponse: false,
-            }
-        }
-    };
-    return JSON.stringify(json);
-};
 
-const build_callback_data_continue = (message) => {
-    const json = {
-        speech: message,
-        displayText: message,
-        data: {
-            google: {
-                expectUserResponse: true,
-            }
-        }
-    };
-    return JSON.stringify(json);
-};
+// Import the appropriate service and chosen wrappers
+const {
+    dialogflow,
+    BasicCard,
+    Button,
+} = require('actions-on-google')
 
-const build_callback_data_for_success = (message) => {
-    const json = {
-        speech: message,
-        displayText: message,
-        data: {
-            google: {
-                expectUserResponse: false,
-                richResponse: {
-                    items: [{
-                            simpleResponse: {
-                                textToSpeech: message,
-                            }
-                        },
-                        {
-                            basicCard: {
-                                title: "体重グラフ",
-                                formattedText: "グラフで確認しませんか?",
-                                buttons: [{
-                                    title: "体重グラフへ",
-                                    openUrlAction: {
-                                        url: "https://diet.dyndns.org/?cmd=user",
-                                    }
-                                }]
-                            }
-                        }
-                    ],
-                    suggestions: []
-                }
-            }
-        }
-    };
+// Create an app instance
+const app = dialogflow();
 
-    return JSON.stringify(json);
-};
 
-function updateDiet(weight, accessToken, callback) {
+function updateDiet(weight, accessToken, conv) {
 
     var date = Date.now();
     var year = new Date(date).getFullYear().toString();
@@ -97,35 +49,52 @@ function updateDiet(weight, accessToken, callback) {
         },
     };
 
-    rp(options).then((response) => {
-        if (response.match(/<p>ログアウトまたはタイムアウトしました。<\/p>/)) {
-            const message = "アカウントリンクの有効期限が切れているようです。アカウントリンクを再設定してください";
-            callback(null, {
-                "statusCode": 200,
-                "body": build_callback_data(message)
-            });
+    var options_check_accesstion = {
+        method: 'GET',
+        uri: "https://diet.dyndns.org/?cmd=oa2_isvalid",
+        headers: {
+	    'Authorization': "Bearer " + accessToken,
+        },
+    };
+    // check access Token
+    return rp(options_check_accesstion).then((response) => {
+        if (response == '{"isValid":false}') {
+	    const message = "利用するために体重グラフでのアカウントのリンク設定をしてください。";
+	    conv.close(message);
         }
-        else if (response.match(/登録しました。<br>/)) {
-            message = weight + 'kg で記録しました。';
-            callback(null, {
-                "statusCode": 200,
-                "body": build_callback_data_for_success(message)
-            });
-        }
-        else {
+	//////
+	return rp(options).then((response) => {
+            if (response.match(/<p>ログアウトまたはタイムアウトしました。<\/p>/)) {
+		const message = "アカウントリンクの有効期限が切れているようです。アカウントリンクを再設定してください";
+		conv.close(message);
+            }
+            else if (response.match(/登録しました。<br>/)) {
+		message = weight + 'kg で記録しました。';
+		conv.close(message);
+		conv.close(new BasicCard({
+		    title: '体重グラフ',
+		    subtitle: 'グラフで確認しませんか?',
+		    buttons: new Button({
+			title: '体重グラフへ',
+			url: "https://diet.dyndns.org/?cmd=user",
+		    }),
+		    display: 'CROPPED'
+		}));
+	    }
+            else {
+		message = '記録に失敗しました。体重グラフのサーバが不調な可能性があります時間を置いてから試みてください';
+		conv.close(message);
+            }
+	}, (error) => {
             message = '記録に失敗しました。体重グラフのサーバが不調な可能性があります時間を置いてから試みてください';
-            callback(null, {
-                "statusCode": 200,
-                "body": build_callback_data(message)
-            });
-        }
+	    conv.close(message);
+	});
+	///////
     }, (error) => {
-        message = '記録に失敗しました。体重グラフのサーバが不調な可能性があります時間を置いてから試みてください';
-        callback(null, {
-            "statusCode": 200,
-            "body": build_callback_data(message)
-        });
+        const message = '記録に失敗しました。体重グラフのサーバが不調な可能性があります時間を置いてから試みてください';
+	conv.close(message);
     });
+
 }
 
 function convertDotNumberStringToDotNumber(s, maxNumberOfDigit) {
@@ -142,109 +111,49 @@ function convertDotNumberStringToDotNumber(s, maxNumberOfDigit) {
     return 0;
 }
 
-exports.handler = (event, context, callback) => {
+
+app.intent('weight', (conv, { weight, dot_number }) => {
     var body = "";
-    var weight = null;
     var accessToken = null;
-    if (event.body == null) {
-        console.error('Unable to get body. Error JSON:', event);
+    if (conv == null) {
+        console.error('Unable to get body. Error JSON:', conv.body);
         const message = "不正なリクエストです。終了します。";
-        callback(null, {
-            "statusCode": 200,
-            "body": build_callback_data(message)
-        });
+	conv.close(message);
     }
 
-    body = JSON.parse(event.body);
-    weight = Number(body.result.parameters.weight);
-    accessToken = body.originalRequest.data.user.accessToken;
-    if (accessToken == null) {
+    weight = Number(weight);
+    console.error(weight);
+    console.error(dot_number);
+    if (conv.user.access.token == null) {
         const message = "利用するために体重グラフでのアカウントのリンク設定をしてください。";
-        callback(null, {
-            "statusCode": 200,
-            "body": build_callback_data(message)
-        });
+	conv.close(message);
+    } else {
+	accessToken = conv.user.access.token;
     }
 
-    var options = {
-        method: 'GET',
-        uri: "https://diet.dyndns.org/?cmd=oa2_isvalid",
-        headers: {
-            'Authorization': "Bearer " + accessToken,
-
-        },
-    };
-    rp(options).then((response) => {
-        if (response == '{"isValid":false}') {
-            const message = "利用するために体重グラフでのアカウントのリンク設定をしてください。";
-            callback(null, {
-                "statusCode": 200,
-                "body": build_callback_data(message)
-            });
-        }
-    }, (error) => {
-        const message = '記録に失敗しました。体重グラフのサーバが不調な可能性があります時間を置いてから試みてください';
-        callback(null, {
-            "statusCode": 200,
-            "body": build_callback_data(message)
-        });
-    });
-
-    var resolvedQuery = body.result.resolvedQuery;
-
-    var v1, v2, v3;
-    v1 = resolvedQuery.match(/(\d+)\s*ドット\s*(\d+)\s*/);
-    v2 = resolvedQuery.match(/(\d+)\s*点\s*(\d+)\s*/);
-    v3 = resolvedQuery.match(/(\d+)\s*と\s*(\d+)\s*/);
-
-    if (v1 != undefined) {
-        console.error(v1[2], weight);
-        var dotnumber = convertDotNumberStringToDotNumber(v1[2], 5);
-        if (dotnumber == -1) {
-            weight = undefined;
-        }
-        else {
-            weight = Number(v1[1]) + dotnumber;
-        }
-    }
-    else if (v2 != undefined) {
-        console.error(v2[2], weight);
-        var dotnumber = convertDotNumberStringToDotNumber(v2[2], 5);
-        if (dotnumber == -1) {
-            weight = undefined;
-        }
-        else {
-            weight = Number(v2[1]) + dotnumber;
-        }
-    }
-    else if (v3 != undefined) {
-        console.error(v3[2], weight);
-        var dotnumber = convertDotNumberStringToDotNumber(v3[2], 5);
-        if (dotnumber == -1) {
-            weight = undefined;
-        }
-        else {
-            weight = Number(v3[1]) + dotnumber;
-        }
-    }
-    if (weight == undefined) { // || (v1 && v1[1] == weight) || (v2 && v2[1] == weight)) {
+    if (weight == undefined) {
         const message = 'すみません、聞き取れませんでした。もう一度、体重を教えてください。';
-        callback(null, {
-            "statusCode": 200,
-            "body": build_callback_data_continue(message)
-        });
+	conv.ask(message);
     }
     else {
+        if (dot_number != undefined) {
+	    var dotNumber = convertDotNumberStringToDotNumber(dot_number, 1);
+	    if (dotNumber == -1) {
+		const message = '小数点以下は一桁までの対応です。もう一度、体重を教えてください。';
+		conv.ask(message);
+            } else {
+		weight = weight + dotNumber;
+	    }
+	}
         if (1 <= weight && weight <= 600) {
-            updateDiet(weight, accessToken, callback);
-            return;
+            return updateDiet(weight, accessToken, conv);
         }
         else {
             const message = '600キログラム以下に対応しています。もう一度、体重を教えてください。';
-            callback(null, {
-                "statusCode": 200,
-                "body": build_callback_data_continue(message)
-            });
+	    conv.ask(message);
         }
     }
-};
+})
+
+
+exports.handler = app
