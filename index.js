@@ -71,6 +71,7 @@ function updateDiet(weight, accessToken, conv) {
         if (response == '{"isValid":false}') {
 	    const message = "利用するために体重グラフでのアカウントのリンク設定をしてください。";
 	    conv.close(message);
+	    return;
         }
 	var options_get_prev_weight = {
             method: 'GET',
@@ -106,6 +107,11 @@ function updateDiet(weight, accessToken, conv) {
 	    });
 	    if (prevWeight != 0) {
 		var diffWeight = Math.round((weight - prevWeight)*10) * 100;
+		if (Math.abs(diffWeight) >= 10*1000) {
+		    const message = weight +"kgと前回から10kg以上の変化があります、もう一度、体重を教えてください。";
+		    conv.ask(message);
+		    return;
+		}
 		if (prevDays > 0) {
 		    var diffMessage = prevDays +"日前から"
 		} else {
@@ -174,12 +180,14 @@ app.intent('weight', (conv, { weight, dot_number }) => {
         console.error('Unable to get body. Error JSON:', conv.body);
         const message = "不正なリクエストです。終了します。";
 	conv.close(message);
+	return;
     }
 
     weight = Number(weight);
     if (conv.user.access.token == null) {
         const message = "利用するために体重グラフでのアカウントのリンク設定をしてください。";
 	conv.close(message);
+	return;
     } else {
 	accessToken = conv.user.access.token;
     }
