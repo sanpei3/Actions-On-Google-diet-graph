@@ -21,6 +21,15 @@ const {
 // Create an app instance
 const app = dialogflow();
 
+function isNoon(date) {
+    var hour = new Date(date).getHours().toString();
+    if (hour >= 5 && hour < 15) {
+	return true;
+    } else {
+	return false;
+    }
+}
+
 
 function updateDiet(weight, accessToken, conv) {
 
@@ -30,6 +39,7 @@ function updateDiet(weight, accessToken, conv) {
     var day = new Date(date).getDate().toString();
     var hour = new Date(date).getHours().toString();
     var message = null;
+    var server_error_message = '記録に失敗しました。体重グラフのサーバが不調な可能性があります時間を置いてから試みてください';
 
     var options = {
         method: 'POST',
@@ -62,39 +72,84 @@ function updateDiet(weight, accessToken, conv) {
 	    const message = "利用するために体重グラフでのアカウントのリンク設定をしてください。";
 	    conv.close(message);
         }
-	//////
-	return rp(options).then((response) => {
-            if (response.match(/<p>ログアウトまたはタイムアウトしました。<\/p>/)) {
-		const message = "アカウントリンクの有効期限が切れているようです。アカウントリンクを再設定してください";
-		conv.close(message);
-            }
-            else if (response.match(/登録しました。<br>/)) {
-		message = weight + 'kg で記録しました。';
-		conv.close(message);
-		conv.close(new BasicCard({
-		    title: '体重グラフ',
-		    subtitle: 'グラフで確認しませんか?',
-		    buttons: new Button({
-			title: '体重グラフへ',
-			url: "https://diet.dyndns.org/?cmd=user",
-		    }),
-		    display: 'CROPPED'
-		}));
-	    }
-            else {
-		message = '記録に失敗しました。体重グラフのサーバが不調な可能性があります時間を置いてから試みてください';
-		conv.close(message);
-            }
-	}, (error) => {
-            message = '記録に失敗しました。体重グラフのサーバが不調な可能性があります時間を置いてから試みてください';
-	    conv.close(message);
-	});
-	///////
-    }, (error) => {
-        const message = '記録に失敗しました。体重グラフのサーバが不調な可能性があります時間を置いてから試みてください';
-	conv.close(message);
-    });
+	var options_get_prev_weight = {
+            method: 'GET',
+            uri: "http://diet.dyndns.org/?cmd=weight_prev&count=10",
+            headers: {
+		'Authorization': "Bearer " + accessToken,
+            },
+	};
 
+	return rp(options_get_prev_weight).then((response) => {
+	    var res = JSON.parse(response);
+
+	    var date = Date.now();
+	    var noonFlag = isNoon(date);
+	    var prevWeight = 0;
+	    var prevDiff = 0;
+	    var prevDays = 0;
+	    var prevHours = 0;
+	    var oneDay = 60*60*24;
+	    var diffMessage = "";
+
+	    res.data.some(function(val, index) {
+		if (isNoon(val.timestamp*1000) == noonFlag) {
+		    prevDiff = val.diff;
+		    prevDays = parseInt(prevDiff / oneDay);
+		    prevHours = parseInt((prevDiff % oneDay) / 60 / 60);
+
+		    if (!(prevDays == 0 && prevHours == 0)) {
+			prevWeight = val.weight;
+			return true;
+		    }
+		}
+	    });
+	    if (prevWeight != 0) {
+		var diffWeight = Math.round((weight - prevWeight)*10) * 100;
+		if (prevDays > 0) {
+		    var diffMessage = prevDays +"日前から"
+		} else {
+		    var diffMessage = prevHours+ "時間前から"
+		}
+		if (diffWeight != 0) {
+		    if (diffWeight > 0) {
+			diffMessage = diffMessage + diffWeight +"g増えました。";
+		    } else {
+			diffMessage = diffMessage + diffWeight * (-1) +"g減りました。";
+		    }
+		} else {
+		    diffMessage = diffMessage + "変化はありませんでした。";
+		}
+	    }
+	    return rp(options).then((response) => {
+		if (response.match(/<p>ログアウトまたはタイムアウトしました。<\/p>/)) {
+		    const message = "アカウントリンクの有効期限が切れているようです。アカウントリンクを再設定してください";
+		    conv.close(message);
+		}
+		else if (response.match(/登録しました。<br>/)) {
+		    message = weight + 'kg で記録しました。'+ diffMessage;
+		    conv.close(message);
+		    conv.close(new BasicCard({
+			title: '体重グラフ',
+			subtitle: 'グラフで確認しませんか?',
+			buttons: new Button({
+			    title: '体重グラフへ',
+			    url: "https://diet.dyndns.org/?cmd=user",
+			}),
+			display: 'CROPPED'
+		    }));
+		}
+		else {
+		    conv.close(server_error_message);
+		}
+	    }, (error) => {
+		conv.close(server_error_message);
+	    });
+	}, (error) => {
+	    conv.close(server_error_message);
+	});
+    });
+    conv.close(server_error_message);
 }
 
 function convertDotNumberStringToDotNumber(s, maxNumberOfDigit) {
@@ -128,7 +183,6 @@ app.intent('weight', (conv, { weight, dot_number }) => {
     } else {
 	accessToken = conv.user.access.token;
     }
-
     if (weight == undefined) {
         const message = 'すみません、聞き取れませんでした。もう一度、体重を教えてください。';
 	conv.ask(message);
