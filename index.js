@@ -39,7 +39,19 @@ function updateDiet(weight, accessToken, conv) {
     var day = new Date(date).getDate().toString();
     var hour = new Date(date).getHours().toString();
     var message = null;
-    var server_error_message = '記録に失敗しました。体重グラフのサーバが不調な可能性があります時間を置いてから試みてください';
+    const server_error_message = '記録に失敗しました。体重グラフのサーバが不調な可能性があります時間を置いてから試みてください';
+    const daysYomi = [
+	" 一日",
+	"二日",
+	"三日",
+	"四日",
+	"五日",
+	"六日",
+	"七日",
+	"八日",
+	"九日",
+	"十日",
+    ];
 
     var options = {
         method: 'POST',
@@ -99,7 +111,8 @@ function updateDiet(weight, accessToken, conv) {
 		    prevDays = parseInt(prevDiff / oneDay);
 		    prevHours = parseInt((prevDiff % oneDay) / 60 / 60);
 
-		    if (!(prevDays == 0 && prevHours == 0)) {
+		    if (!(prevDays == 0 && prevHours == 0) &&
+			!(prevDays == 0 && prevHours <= 12)) {
 			prevWeight = val.weight;
 			return true;
 		    }
@@ -112,10 +125,14 @@ function updateDiet(weight, accessToken, conv) {
 		    conv.ask(message);
 		    return;
 		}
-		if (prevDays > 0) {
-		    var diffMessage = prevDays +"日前から"
-		} else {
-		    var diffMessage = prevHours+ "時間前から"
+		if (prevHours > 12) {
+		    prevHours = 0;
+		    prevDays = prevDays + 1;
+		}
+		if (prevDays <= 10) {
+		    var diffMessage = daysYomi[prevDays - 1] +"前から"
+		} else{
+		    var diffMessage = prevDays + "前から"
 		}
 		if (diffWeight != 0) {
 		    if (diffWeight > 0) {
