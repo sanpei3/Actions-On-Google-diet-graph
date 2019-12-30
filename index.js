@@ -227,11 +227,22 @@ app.intent('weight', (conv, { weight, dot_number }) => {
 		weight = weight + dotNumber;
 	    }
 	}
-        if (1 <= weight && weight <= 600) {
+        if (1 <= weight && weight < 200) {
+	    // 十桁目が0かを判断
+	    // h = Hundreds place
+	    var h = parseInt(weight / 100);
+	    // t = Tens place
+	    var t = weight - h * 100;
+	    if (t < 10) {
+		t = t * 10;
+		t = Math.round(t);
+		t = t / 10;
+		weight = h * 10 + t;
+	    }
             return updateDiet(weight, accessToken, conv);
         }
         else {
-            const message = '600キログラム以下に対応しています。もう一度、体重を教えてください。';
+            const message = '200キログラム以下に対応しています。もう一度、体重を教えてください。';
 	    conv.ask(message);
         }
     }
