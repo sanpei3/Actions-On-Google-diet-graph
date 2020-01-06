@@ -227,7 +227,7 @@ app.intent('weight', (conv, { weight, dot_number }) => {
 		weight = weight + dotNumber;
 	    }
 	}
-        if (1 <= weight && weight < 200) {
+	if (200 <= weight && weight < 1000) {
 	    // 十桁目が0かを判断
 	    // h = Hundreds place
 	    var h = parseInt(weight / 100);
@@ -239,6 +239,8 @@ app.intent('weight', (conv, { weight, dot_number }) => {
 		t = t / 10;
 		weight = h * 10 + t;
 	    }
+	}
+        if (1 <= weight && weight < 200) {
             return updateDiet(weight, accessToken, conv);
         }
         else {
