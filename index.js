@@ -141,9 +141,9 @@ function updateDiet(weight, accessToken, conv) {
 		}
 		if (diffWeight != 0) {
 		    if (diffWeight > 0) {
-			diffMessage = diffMessage + diffWeight +"g増えました。";
+			diffMessage = diffMessage + diffWeight +"グラム増えました。";
 		    } else {
-			diffMessage = diffMessage + diffWeight * (-1) +"g減りました。";
+			diffMessage = diffMessage + diffWeight * (-1) +"グラム減りました。";
 		    }
 		} else {
 		    diffMessage = diffMessage + "変化はありませんでした。";
@@ -176,8 +176,9 @@ function updateDiet(weight, accessToken, conv) {
 	}, (error) => {
 	    conv.close(server_error_message);
 	});
+    }, (error) => {
+	conv.close(server_error_message);
     });
-    conv.close(server_error_message);
 }
 
 function convertDotNumberStringToDotNumber(s, maxNumberOfDigit) {
